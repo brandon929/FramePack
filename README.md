@@ -38,16 +38,17 @@ In any case, you will directly see the generated frames since it is next-frame(-
 
 # Installation
 
-**Windows**:
+For CUDA (NVIDIA GPUs):
+```bash
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+pip install -r requirements.txt
+```
 
-One-click-package will be released soon. Please come back tomorrow.
-
-**Linux**:
-
-We recommend having an independent Python 3.10.
-
-    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
-    pip install -r requirements.txt
+For MPS (Apple Silicon Macs):
+```bash
+pip install torch torchvision torchaudio
+pip install -r requirements.txt
+```
 
 To start the GUI, run:
 
