@@ -32,6 +32,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--share', action='store_true')
 parser.add_argument("--server", type=str, default='0.0.0.0')
 parser.add_argument("--port", type=int, default=7860)
+parser.add_argument("--output_dir", type=str, default='./outputs')
 args = parser.parse_args()
 
 print(args)
@@ -41,10 +42,8 @@ if torch.cuda.is_available():
     high_vram = free_mem_gb > 40
     print(f'Free VRAM {free_mem_gb} GB')
 else:
-    # For MPS, we'll use a fixed value since we can't get memory stats
-    free_mem_gb = 100.0
+    # For MPS, we'll say high_vram is always True
     high_vram = True
-    print(f'Using MPS device with estimated {free_mem_gb} GB available')
 
 print(f'High-VRAM Mode: {high_vram}')
 
@@ -105,7 +104,7 @@ else:
 
 stream = AsyncStream()
 
-outputs_folder = './outputs/'
+outputs_folder = args.output_dir
 os.makedirs(outputs_folder, exist_ok=True)
 
 
@@ -148,7 +147,7 @@ def worker(input_image, prompt, n_prompt, seed, total_second_length, latent_wind
         stream.output_queue.push(('progress', (None, '', make_progress_bar_html(0, 'Image processing ...'))))
 
         H, W, C = input_image.shape
-        height, width = find_nearest_bucket(H, W, resolution=640)
+        height, width = find_nearest_bucket(H, W, resolution=480)
         input_image_np = resize_and_center_crop(input_image, target_width=width, target_height=height)
 
         Image.fromarray(input_image_np).save(os.path.join(outputs_folder, f'{job_id}.png'))
@@ -405,4 +404,5 @@ block.launch(
     server_name=args.server,
     server_port=args.port,
     share=args.share,
+    allowed_paths=[outputs_folder],
 )
