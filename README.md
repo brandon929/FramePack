@@ -36,25 +36,13 @@ About speed, on my RTX 4090 desktop it generates at a speed of 2.5 seconds/frame
 
 In any case, you will directly see the generated frames since it is next-frame(-section) prediction. So you will get lots of visual feedback before the entire video is generated.
 
-# Installation
+# Installation (NVIDIA)
 
 For CUDA (NVIDIA GPUs):
 ```bash
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
 pip install -r requirements.txt
 ```
-
-For MPS (Apple Silicon Macs):
-```bash
-pip install torch torchvision torchaudio
-pip install -r requirements.txt
-```
-
-To start the GUI, run:
-
-    python demo_gradio.py
-
-Note that it supports `--share`, `--port`, `--server`, and so on.
 
 The software supports PyTorch attention, xformers, flash-attn, sage-attention. By default, it will just use PyTorch attention. You can install those attention kernels if you know how. 
 
@@ -63,6 +51,45 @@ For example, to install sage-attention (linux):
     pip install sageattention==1.0.6
 
 However, you are highly recommended to first try without sage-attention since it will influence results, though the influence is minimal.
+
+To start the GUI, run:
+
+    python demo_gradio.py
+
+Note that it supports `--share`, `--port`, `--server`, and so on.
+
+# Installation (macOS)
+
+FramePack recommends using Python 3.10.  If you have [homebrew](https://brew.sh/) installed, you can install Python 3.10 using brew.
+```bash
+brew install python@3.10
+```
+
+To install dependencies
+```bash
+pip3.10 install --pre torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/nightly/cpu
+pip3.10 install -r requirements.txt
+```
+
+# Starting FramePack on macOS
+To start the GUI, run:
+
+    python3.10 demo_gradio.py
+
+Some additional arguments you can specify are:
+* `--share`: Enable sharing the Gradio interface via a public URL
+* `--server`: Specify the server address (default: '0.0.0.0')
+* `--port`: Specify the port number to run the server on (default: 7860)
+* `--output_dir`: Set the directory for saving generated outputs (default: './outputs')
+* `--resolution`: Set the target resolution for video generation (default: 416)
+* `--fp32`: Use float32 precision instead of float16/bfloat16 (helpful for some M1/M2 processors)
+
+When running on M1 or M2 processors you may need to pass `--fp32` as they may not fully support float16 and bfloat16.
+
+You can also adjust the resolution of the generated videos using `--resolution`.  
+In the original FramePack version, the resolution was set to 640.  However, as of the time this documentation was written, MPS in pytorch has issues with the large tensors needed to generate videos at that resolution.  This version now defaults to 416, but may also be successful with slightly higher resolutions like 480.  Feel free to experiment with the setting.
+
+(NOTE: The 640 value means it will generate a video that is roughly 640x640 for a square image.  If the image has a different aspect ratio, the resolution will attempt to match the ratio and keep roughly the same number of pixels.)
 
 # GUI
 
