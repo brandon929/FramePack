@@ -399,8 +399,6 @@ with block:
 
                 mp4_crf = gr.Slider(label="MP4 Compression", minimum=0, maximum=100, value=16, step=1, info="Lower means better quality. 0 is uncompressed. Change to 16 if you get black outputs. ")
 
-                mp4_crf = gr.Slider(label="MP4 Compression", minimum=0, maximum=100, value=16, step=1, info="Lower means better quality. 0 is uncompressed. Change to 16 if you get black outputs. ")
-
         with gr.Column():
             preview_image = gr.Image(label="Next Latents", height=200, visible=False)
             result_video = gr.Video(label="Finished Frames", autoplay=True, show_share_button=False, height=512, loop=True)

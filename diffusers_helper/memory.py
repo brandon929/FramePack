@@ -85,32 +85,32 @@ def get_cuda_free_memory_gb(device=None):
         bytes_free_cuda, _ = torch.cuda.mem_get_info(device)
         bytes_inactive_reserved = bytes_reserved - bytes_active
         bytes_total_available = bytes_free_cuda + bytes_inactive_reserved
-        return bytes_total_available / (1024 ** 3)
     elif device.type == 'mps':
-        # MPS doesn't provide detailed memory stats, return a fixed value
-        return 16.0  # Assuming 16GB available for MPS
-    else:
-        return 0.0
+        # MPS doesn't provide detailed memory stats, return a best guess
+        bytes_total_available = torch.mps.recommended_max_memory() - torch.mps.driver_allocated_memory()
 
+    return bytes_total_available / (1024 ** 3)
+
+
+def empty_cache():
+    if gpu.type == 'cuda':
+        torch.cuda.empty_cache()
+    elif gpu.type == 'mps':
+        torch.mps.empty_cache()
 
 def move_model_to_device_with_memory_preservation(model, target_device, preserved_memory_gb=0):
     print(f'Moving {model.__class__.__name__} to {target_device} with preserved memory: {preserved_memory_gb} GB')
 
-    if target_device.type == 'cuda':
-        for m in model.modules():
-            if get_cuda_free_memory_gb(target_device) <= preserved_memory_gb:
-                torch.cuda.empty_cache()
-                return
+    for m in model.modules():
+        if get_cuda_free_memory_gb(target_device) <= preserved_memory_gb:
+            empty_cache()
+            return
 
-            if hasattr(m, 'weight'):
-                m.to(device=target_device)
-    else:
-        # For MPS, just move the model directly
-        model.to(device=target_device)
+        if hasattr(m, 'weight'):
+            m.to(device=target_device)
 
     model.to(device=target_device)
-    if target_device.type == 'cuda':
-        torch.cuda.empty_cache()
+    empty_cache()
     return
 
 
@@ -120,7 +120,7 @@ def offload_model_from_device_for_memory_preservation(model, target_device, pres
     if target_device.type == 'cuda':
         for m in model.modules():
             if get_cuda_free_memory_gb(target_device) >= preserved_memory_gb:
-                torch.cuda.empty_cache()
+                empty_cache()
                 return
 
             if hasattr(m, 'weight'):
@@ -130,8 +130,7 @@ def offload_model_from_device_for_memory_preservation(model, target_device, pres
         model.to(device=cpu)
 
     model.to(device=cpu)
-    if target_device.type == 'cuda':
-        torch.cuda.empty_cache()
+    empty_cache()
     return
 
 
@@ -141,8 +140,7 @@ def unload_complete_models(*args):
         print(f'Unloaded {m.__class__.__name__} as complete.')
 
     gpu_complete_modules.clear()
-    if gpu.type == 'cuda':
-        torch.cuda.empty_cache()
+    empty_cache()
     return
 
 
