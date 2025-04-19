@@ -16,6 +16,8 @@ FramePack can process a very large number of frames with 13B models even on lapt
 
 FramePack can be trained with a much larger batch size, similar to the batch size for image diffusion training.
 
+This version of FramePack is rendering videos at 24fps.
+
 **Video diffusion, but feels like image diffusion.**
 
 # Requirements
