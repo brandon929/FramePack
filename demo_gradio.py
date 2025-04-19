@@ -34,7 +34,7 @@ parser.add_argument('--share', action='store_true')
 parser.add_argument("--server", type=str, default='0.0.0.0')
 parser.add_argument("--port", type=int, default=7860)
 parser.add_argument("--output_dir", type=str, default='./outputs')
-parser.add_argument("--resolution_bucket", type=int, default=416)
+parser.add_argument("--resolution", type=int, default=416)
 parser.add_argument("--fp32", action='store_true', default=False)
 args = parser.parse_args()
 
@@ -150,7 +150,7 @@ def worker(input_image, prompt, n_prompt, seed, total_second_length, latent_wind
         stream.output_queue.push(('progress', (None, '', make_progress_bar_html(0, 'Image processing ...'))))
 
         H, W, C = input_image.shape
-        height, width = find_nearest_bucket(H, W, resolution=args.resolution_bucket)
+        height, width = find_nearest_bucket(H, W, resolution=args.resolution)
         input_image_np = resize_and_center_crop(input_image, target_width=width, target_height=height)
 
         Image.fromarray(input_image_np).save(os.path.join(outputs_folder, f'{job_id}.png'))
