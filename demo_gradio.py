@@ -3,6 +3,7 @@ from diffusers_helper.hf_login import login
 import os
 
 os.environ['HF_HOME'] = os.path.abspath(os.path.realpath(os.path.join(os.path.dirname(__file__), './hf_download')))
+os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 
 import gradio as gr
 import torch
@@ -33,18 +34,19 @@ parser.add_argument('--share', action='store_true')
 parser.add_argument("--server", type=str, default='0.0.0.0')
 parser.add_argument("--port", type=int, default=7860)
 parser.add_argument("--output_dir", type=str, default='./outputs')
+parser.add_argument("--resolution_bucket", type=int, default=416)
+parser.add_argument("--fp32", action='store_true', default=False)
 args = parser.parse_args()
 
 print(args)
 
 if torch.cuda.is_available():
     free_mem_gb = get_cuda_free_memory_gb(gpu)
-    high_vram = free_mem_gb > 40
-    print(f'Free VRAM {free_mem_gb} GB')
 else:
-    # For MPS, we'll say high_vram is always True
-    high_vram = True
+    free_mem_gb = torch.mps.recommended_max_memory() / 1024 / 1024 / 1024
 
+high_vram = free_mem_gb > 40
+print(f'Free VRAM {free_mem_gb} GB')
 print(f'High-VRAM Mode: {high_vram}')
 
 text_encoder = LlamaModel.from_pretrained("hunyuanvideo-community/HunyuanVideo", subfolder='text_encoder', torch_dtype=torch.float16).cpu()
@@ -71,8 +73,9 @@ if not high_vram:
 transformer.high_quality_fp32_output_for_inference = True
 print('transformer.high_quality_fp32_output_for_inference = True')
 
-# For MPS, we need to use float32 instead of bfloat16
-if gpu.type == 'mps':
+# For MPS, some processors like M1/M2 may need to use float32
+if args.fp32:
+    print('Using float32 for transformer and encoder models')
     transformer.to(dtype=torch.float32)
     vae.to(dtype=torch.float32)
     image_encoder.to(dtype=torch.float32)
@@ -147,7 +150,7 @@ def worker(input_image, prompt, n_prompt, seed, total_second_length, latent_wind
         stream.output_queue.push(('progress', (None, '', make_progress_bar_html(0, 'Image processing ...'))))
 
         H, W, C = input_image.shape
-        height, width = find_nearest_bucket(H, W, resolution=480)
+        height, width = find_nearest_bucket(H, W, resolution=args.resolution_bucket)
         input_image_np = resize_and_center_crop(input_image, target_width=width, target_height=height)
 
         Image.fromarray(input_image_np).save(os.path.join(outputs_folder, f'{job_id}.png'))
@@ -387,7 +390,8 @@ with block:
                 gs = gr.Slider(label="Distilled CFG Scale", minimum=1.0, maximum=32.0, value=10.0, step=0.01, info='Changing this value is not recommended.')
                 rs = gr.Slider(label="CFG Re-Scale", minimum=0.0, maximum=1.0, value=0.0, step=0.01, visible=False)  # Should not change
 
-                gpu_memory_preservation = gr.Slider(label="GPU Inference Preserved Memory (GB) (larger means slower)", minimum=6, maximum=128, value=6, step=0.1, info="Set this number to a larger value if you encounter OOM. Larger value causes slower speed.")
+                # This is only used when high_vram is False
+                gpu_memory_preservation = gr.Slider(label="GPU Inference Preserved Memory (GB) (larger means slower)", minimum=6, maximum=128, value=6, step=0.1, info="Set this number to a larger value if you encounter OOM. Larger value causes slower speed.", visible=not high_vram)
 
         with gr.Column():
             preview_image = gr.Image(label="Next Latents", height=200, visible=False)
