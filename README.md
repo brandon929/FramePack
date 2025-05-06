@@ -6,7 +6,7 @@
 
 Official implementation and desktop software for ["Packing Input Frame Context in Next-Frame Prediction Models for Video Generation"](https://lllyasviel.github.io/frame_pack_gitpage/).
 
-Links: [**Paper**](https://lllyasviel.github.io/frame_pack_gitpage/pack.pdf), [**Project Page**](https://lllyasviel.github.io/frame_pack_gitpage/)
+Links: [**Paper**](https://arxiv.org/abs/2504.12626), [**Project Page**](https://lllyasviel.github.io/frame_pack_gitpage/)
 
 FramePack is a next-frame (next-frame-section) prediction neural network structure that generates videos progressively. 
 
@@ -20,7 +20,9 @@ This version of FramePack is rendering videos at 24fps.
 
 **Video diffusion, but feels like image diffusion.**
 
-# Notes
+# News
+
+**2025 May 03:** The FramePack-F1 is released. [Try it here.](https://github.com/lllyasviel/FramePack/discussions/459)
 
 Note that this GitHub repository is the only official FramePack website. We do not have any web services. All other websites are spam and fake, including but not limited to `framepack.co`, `frame_pack.co`, `framepack.net`, `frame_pack.net`, `framepack.ai`, `frame_pack.ai`, `framepack.pro`, `frame_pack.pro`, `framepack.cc`, `frame_pack.cc`,`framepackai.co`, `frame_pack_ai.co`, `framepackai.net`, `frame_pack_ai.net`, `framepackai.pro`, `frame_pack_ai.pro`, `framepackai.cc`, `frame_pack_ai.cc`, and so on. Again, they are all spam and fake. **Do not pay money or download files from any of those websites.**
 
@@ -38,7 +40,7 @@ Requirements:
 
 To generate 1-minute video (60 seconds) at 30fps (1800 frames) using 13B model, the minimal required GPU memory is 6GB. (Yes 6 GB, not a typo. Laptop GPUs are okay.)
 
-About speed, on my RTX 4090 desktop it generates at a speed of 2.5 seconds/frame (unoptimized) or 1.5 seconds/frame (teacache). On my laptops like 3070ti laptop or 3060 laptop, it is about 4x to 8x slower.
+About speed, on my RTX 4090 desktop it generates at a speed of 2.5 seconds/frame (unoptimized) or 1.5 seconds/frame (teacache). On my laptops like 3070ti laptop or 3060 laptop, it is about 4x to 8x slower. [Troubleshoot if your speed is much slower than this.](https://github.com/lllyasviel/FramePack/issues/151#issuecomment-2817054649)
 
 In any case, you will directly see the generated frames since it is next-frame(-section) prediction. So you will get lots of visual feedback before the entire video is generated.
 
