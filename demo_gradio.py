@@ -35,7 +35,6 @@ parser.add_argument("--server", type=str, default='0.0.0.0')
 parser.add_argument("--port", type=int, required=False)
 parser.add_argument("--inbrowser", action='store_true')
 parser.add_argument("--output_dir", type=str, default='./outputs')
-parser.add_argument("--fp32", action='store_true', default=False)
 args = parser.parse_args()
 
 # for win desktop probably use --server 127.0.0.1 --inbrowser
@@ -76,20 +75,11 @@ if not high_vram:
 transformer.high_quality_fp32_output_for_inference = True
 print('transformer.high_quality_fp32_output_for_inference = True')
 
-# For MPS, some processors like M1/M2 may need to use float32
-if args.fp32:
-    print('Using float32 for transformer and encoder models')
-    transformer.to(dtype=torch.float32)
-    vae.to(dtype=torch.float32)
-    image_encoder.to(dtype=torch.float32)
-    text_encoder.to(dtype=torch.float32)
-    text_encoder_2.to(dtype=torch.float32)
-else:
-    transformer.to(dtype=torch.bfloat16)
-    vae.to(dtype=torch.float16)
-    image_encoder.to(dtype=torch.float16)
-    text_encoder.to(dtype=torch.float16)
-    text_encoder_2.to(dtype=torch.float16)
+transformer.to(dtype=torch.bfloat16)
+vae.to(dtype=torch.float16)
+image_encoder.to(dtype=torch.float16)
+text_encoder.to(dtype=torch.float16)
+text_encoder_2.to(dtype=torch.float16)
 
 vae.requires_grad_(False)
 text_encoder.requires_grad_(False)
