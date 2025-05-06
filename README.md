@@ -108,9 +108,6 @@ Some additional arguments you can specify are:
 * `--server`: Specify the server address (default: '0.0.0.0')
 * `--port`: Specify the port number to run the server on (default: 7860)
 * `--output_dir`: Set the directory for saving generated outputs (default: './outputs')
-* `--fp32`: Use float32 precision instead of float16/bfloat16 (helpful for some M1/M2 processors)
-
-When running on M1 or M2 processors you may need to pass `--fp32` as they may not fully support float16 and bfloat16.
 
 This version now defaults to 416, but may also be successful with slightly higher resolutions like 480.  Feel free to experiment with the setting.
 (NOTE: The 640 value means it will generate a video that is roughly 640x640 for a square image.  If the image has a different aspect ratio, the resolution will attempt to match the ratio and keep roughly the same number of pixels.)
