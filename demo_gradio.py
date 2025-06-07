@@ -13,6 +13,8 @@ import safetensors.torch as sf
 import numpy as np
 import argparse
 import math
+import gc
+import time
 
 from PIL import Image
 from diffusers import AutoencoderKLHunyuanVideo
@@ -27,6 +29,7 @@ from diffusers_helper.gradio.progress_bar import make_progress_bar_css, make_pro
 from transformers import SiglipImageProcessor, SiglipVisionModel
 from diffusers_helper.clip_vision import hf_clip_vision_encode
 from diffusers_helper.bucket_tools import find_nearest_bucket
+from utils.lora_utils import merge_lora_to_state_dict
 
 
 parser = argparse.ArgumentParser()
@@ -60,22 +63,20 @@ vae = AutoencoderKLHunyuanVideo.from_pretrained("hunyuanvideo-community/HunyuanV
 feature_extractor = SiglipImageProcessor.from_pretrained("lllyasviel/flux_redux_bfl", subfolder='feature_extractor')
 image_encoder = SiglipVisionModel.from_pretrained("lllyasviel/flux_redux_bfl", subfolder='image_encoder', torch_dtype=torch.float16).cpu()
 
-transformer = HunyuanVideoTransformer3DModelPacked.from_pretrained('lllyasviel/FramePackI2V_HY', torch_dtype=torch.bfloat16).cpu()
+transformer = None  # load later
+transformer_dtype = torch.bfloat16
+previous_lora_file = None
+previous_lora_multiplier = None
 
 vae.eval()
 text_encoder.eval()
 text_encoder_2.eval()
 image_encoder.eval()
-transformer.eval()
 
 if not high_vram:
     vae.enable_slicing()
     vae.enable_tiling()
 
-transformer.high_quality_fp32_output_for_inference = True
-print('transformer.high_quality_fp32_output_for_inference = True')
-
-transformer.to(dtype=torch.bfloat16)
 vae.to(dtype=torch.float16)
 image_encoder.to(dtype=torch.float16)
 text_encoder.to(dtype=torch.float16)
@@ -85,18 +86,15 @@ vae.requires_grad_(False)
 text_encoder.requires_grad_(False)
 text_encoder_2.requires_grad_(False)
 image_encoder.requires_grad_(False)
-transformer.requires_grad_(False)
 
 if not high_vram:
     # DynamicSwapInstaller is same as huggingface's enable_sequential_offload but 3x faster
-    DynamicSwapInstaller.install_model(transformer, device=gpu)
     DynamicSwapInstaller.install_model(text_encoder, device=gpu)
 else:
     text_encoder.to(gpu)
     text_encoder_2.to(gpu)
     image_encoder.to(gpu)
     vae.to(gpu)
-    transformer.to(gpu)
 
 stream = AsyncStream()
 
@@ -105,7 +103,14 @@ os.makedirs(outputs_folder, exist_ok=True)
 
 
 @torch.no_grad()
-def worker(input_image, prompt, n_prompt, seed, total_second_length, latent_window_size, steps, cfg, gs, rs, gpu_memory_preservation, use_teacache, mp4_crf, resolution):
+def worker(input_image, prompt, n_prompt, seed, total_second_length, latent_window_size, steps, cfg, gs, rs, gpu_memory_preservation, use_teacache, mp4_crf, resolution, lora_file, lora_multiplier):
+    global transformer, previous_lora_file, previous_lora_multiplier
+
+    model_changed = transformer is None or (
+        lora_file != previous_lora_file
+        or lora_multiplier != previous_lora_multiplier
+    )
+
     total_latent_sections = (total_second_length * 24) / (latent_window_size * 4)
     total_latent_sections = int(max(round(total_latent_sections), 1))
 
@@ -172,11 +177,44 @@ def worker(input_image, prompt, n_prompt, seed, total_second_length, latent_wind
 
         # Dtype
 
-        llama_vec = llama_vec.to(transformer.dtype)
-        llama_vec_n = llama_vec_n.to(transformer.dtype)
-        clip_l_pooler = clip_l_pooler.to(transformer.dtype)
-        clip_l_pooler_n = clip_l_pooler_n.to(transformer.dtype)
-        image_encoder_last_hidden_state = image_encoder_last_hidden_state.to(transformer.dtype)
+        llama_vec = llama_vec.to(transformer_dtype)
+        llama_vec_n = llama_vec_n.to(transformer_dtype)
+        clip_l_pooler = clip_l_pooler.to(transformer_dtype)
+        clip_l_pooler_n = clip_l_pooler_n.to(transformer_dtype)
+        image_encoder_last_hidden_state = image_encoder_last_hidden_state.to(transformer_dtype)
+
+        # Load transformer model
+        if model_changed:
+            stream.output_queue.push(('progress', (None, '', make_progress_bar_html(0, 'Loading transformer ...'))))
+
+            transformer = None
+            time.sleep(1.0)  # wait for the previous model to be unloaded
+            torch.cuda.empty_cache()
+            gc.collect()
+
+            previous_lora_file = lora_file
+            previous_lora_multiplier = lora_multiplier
+
+            transformer = HunyuanVideoTransformer3DModelPacked.from_pretrained('lllyasviel/FramePackI2V_HY', torch_dtype=torch.bfloat16).cpu()
+            transformer.eval()
+            transformer.high_quality_fp32_output_for_inference = True
+            print('transformer.high_quality_fp32_output_for_inference = True')
+
+            transformer.to(dtype=torch.bfloat16)
+            transformer.requires_grad_(False)
+
+            if lora_file is not None:
+                state_dict = transformer.state_dict()
+                print(f"Merging LoRA file {os.path.basename(lora_file)} ...")
+                state_dict = merge_lora_to_state_dict(state_dict, lora_file, lora_multiplier, device=gpu)
+                gc.collect()
+                info = transformer.load_state_dict(state_dict, strict=True, assign=True)
+                print(f"LoRA applied: {info}")
+
+            if not high_vram:
+                DynamicSwapInstaller.install_model(transformer, device=gpu)
+            else:
+                transformer.to(gpu)
 
         # Sampling
 
@@ -315,7 +353,7 @@ def worker(input_image, prompt, n_prompt, seed, total_second_length, latent_wind
     return
 
 
-def process(input_image, prompt, n_prompt, seed, total_second_length, latent_window_size, steps, cfg, gs, rs, gpu_memory_preservation, use_teacache, mp4_crf, resolution):
+def process(input_image, prompt, n_prompt, seed, total_second_length, latent_window_size, steps, cfg, gs, rs, gpu_memory_preservation, use_teacache, mp4_crf, resolution, lora_file, lora_multiplier):
     global stream
     assert input_image is not None, 'No input image!'
 
@@ -323,7 +361,7 @@ def process(input_image, prompt, n_prompt, seed, total_second_length, latent_win
 
     stream = AsyncStream()
 
-    async_run(worker, input_image, prompt, n_prompt, seed, total_second_length, latent_window_size, steps, cfg, gs, rs, gpu_memory_preservation, use_teacache, mp4_crf, resolution)
+    async_run(worker, input_image, prompt, n_prompt, seed, total_second_length, latent_window_size, steps, cfg, gs, rs, gpu_memory_preservation, use_teacache, mp4_crf, resolution, lora_file, lora_multiplier)
 
     output_filename = None
 
@@ -389,6 +427,10 @@ with block:
 
                 mp4_crf = gr.Slider(label="MP4 Compression", minimum=0, maximum=100, value=16, step=1, info="Lower means better quality. 0 is uncompressed. Change to 16 if you get black outputs. ")
 
+            with gr.Group():
+                lora_file = gr.File(label="LoRA File", file_count="single", type="filepath")
+                lora_multiplier = gr.Slider(label="LoRA Multiplier", minimum=0.0, maximum=1.0, value=0.8, step=0.1)
+
         with gr.Column():
             preview_image = gr.Image(label="Next Latents", height=200, visible=False)
             result_video = gr.Video(label="Finished Frames", autoplay=True, show_share_button=False, height=512, loop=True)
@@ -398,7 +440,7 @@ with block:
 
     gr.HTML('<div style="text-align:center; margin-top:20px;">Share your results and find ideas at the <a href="https://x.com/search?q=framepack&f=live" target="_blank">FramePack Twitter (X) thread</a></div>')
 
-    ips = [input_image, prompt, n_prompt, seed, total_second_length, latent_window_size, steps, cfg, gs, rs, gpu_memory_preservation, use_teacache, mp4_crf, resolution]
+    ips = [input_image, prompt, n_prompt, seed, total_second_length, latent_window_size, steps, cfg, gs, rs, gpu_memory_preservation, use_teacache, mp4_crf, resolution, lora_file, lora_multiplier]
     start_button.click(fn=process, inputs=ips, outputs=[result_video, preview_image, progress_desc, progress_bar, start_button, end_button])
     end_button.click(fn=end_process)
 
